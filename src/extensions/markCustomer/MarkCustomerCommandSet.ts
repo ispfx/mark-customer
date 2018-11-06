@@ -9,6 +9,7 @@ import {
 import { Dialog } from '@microsoft/sp-dialog';
 
 import * as strings from 'MarkCustomerCommandSetStrings';
+import { SPHttpClient } from '@microsoft/sp-http';
 
 /**
  * If your command set uses the ClientSideComponentProperties JSON input,
@@ -27,27 +28,35 @@ export default class MarkCustomerCommandSet extends BaseListViewCommandSet<IMark
 
   @override
   public onInit(): Promise<void> {
-    Log.info(LOG_SOURCE, 'Initialized MarkCustomerCommandSet');
     return Promise.resolve();
   }
 
   @override
   public onListViewUpdated(event: IListViewCommandSetListViewUpdatedParameters): void {
-    const compareOneCommand: Command = this.tryGetCommand('COMMAND_1');
-    if (compareOneCommand) {
+    const markCustomerCommand: Command = this.tryGetCommand('MARK_CUSTOMER');
+    if (markCustomerCommand) {
       // This command should be hidden unless exactly one row is selected.
-      compareOneCommand.visible = event.selectedRows.length === 1;
+      markCustomerCommand.visible = event.selectedRows.length === 1;
     }
   }
 
   @override
   public onExecute(event: IListViewCommandSetExecuteEventParameters): void {
     switch (event.itemId) {
-      case 'COMMAND_1':
-        Dialog.alert(`${this.properties.sampleTextOne}`);
-        break;
-      case 'COMMAND_2':
-        Dialog.alert(`${this.properties.sampleTextTwo}`);
+      case 'MARK_CUSTOMER':
+        event.selectedRows.map(row => {
+          // Get lead data
+          const id: number = row.getValueByName('ID');
+          const isCustomer: boolean = row.getValueByName('Customer') === 'Yes';
+
+          this.context.spHttpClient.post(`${this.context.pageContext.web.absoluteUrl}/_api/lists/getbyid('${this.context.pageContext.list.id}')/items/getbyid(${id})`, SPHttpClient.configurations.v1, {
+            body: `{ "Customer": ${!isCustomer} }`,
+            headers: {
+              'X-HTTP-Method': 'MERGE',
+              'IF-MATCH': '*',
+            },
+          });
+        });
         break;
       default:
         throw new Error('Unknown command');
